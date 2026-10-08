@@ -1,8 +1,8 @@
 --!strict
 -- The Flow scenes this plugin keeps (SCENES in hooks/styles.ts, in `/flow
--- next` order, without balloon, surf, ski and train). Each scene's module
--- loads on demand: compiling one can take tens of milliseconds, so a caller
--- under a time budget loads one module per call (`load`) and makes scenes
+-- next` order, without balloon, falcon, starship, surf, ski and train). Each scene's code
+-- loads on demand: compiling a file can take up to ~20 ms, so a caller
+-- under a time budget loads one file per call (`load`) and makes scenes
 -- only once `loaded` says so.
 --
 -- A scene: fields strength (0..10), coverageBoost, tint ("normal" | "smoke" |
@@ -11,23 +11,38 @@
 
 local M = {}
 
-M.NAMES = { "fire", "warp", "avalon", "engine", "falcon", "starship", "bubbles" }
-
--- Scenes that draw a night version too.
-M.NIGHT = { falcon = true, starship = true }
+M.NAMES = { "fire", "warp", "avalon", "engine", "bubbles" }
 
 local MODULE: { [string]: string } = {
 	fire = "ember",
 	warp = "starfield",
 	avalon = "colony",
 	engine = "engine",
-	falcon = "rocket",
-	starship = "rocket",
 	bubbles = "bubbles",
 }
 
--- require() needs a literal path in Luau's require-by-string.
-local LOADERS: { [string]: () -> any } = {
+-- require() needs a literal path in Luau's require-by-string. It caches each
+-- file, so requiring a scene's dependencies first, one per call, leaves only
+-- that file to compile in each.
+local FILES: { [string]: () -> any } = {
+	js = function()
+		return require("./js")
+	end,
+	cells = function()
+		return require("./cells")
+	end,
+	pixels = function()
+		return require("./pixels")
+	end,
+	waiting = function()
+		return require("./waiting")
+	end,
+	sound = function()
+		return require("./sound")
+	end,
+	fire = function()
+		return require("./fire")
+	end,
 	ember = function()
 		return require("./ember")
 	end,
@@ -40,64 +55,64 @@ local LOADERS: { [string]: () -> any } = {
 	engine = function()
 		return require("./engine")
 	end,
-	rocket = function()
-		return require("./rocket")
+	engine_draw = function()
+		return require("./engine_draw")
 	end,
 	bubbles = function()
 		return require("./bubbles")
 	end,
 }
 
--- The two biggest modules are split in half (each half compiles within a
--- Tern call's budget); the second half adds its methods to the first's class.
-local SECOND: { [string]: () -> any } = {
-	engine = function()
-		return require("./engine_draw")
-	end,
-	rocket = function()
-		return require("./rocket_draw")
-	end,
+-- Each module's files in load order: dependencies first, the module itself
+-- last but for the second half of a split one (engine is split so each
+-- half compiles within a call's budget; the second half adds its methods
+-- to the first's class).
+local STEPS: { [string]: { string } } = {
+	ember = { "js", "cells", "pixels", "waiting", "fire", "ember" },
+	starfield = { "js", "cells", "pixels", "waiting", "fire", "starfield" },
+	colony = { "js", "cells", "pixels", "waiting", "sound", "colony" },
+	engine = { "js", "cells", "pixels", "waiting", "sound", "engine", "engine_draw" },
+	bubbles = { "js", "cells", "pixels", "waiting", "bubbles" },
 }
+local SECOND: { [string]: string } = { engine = "engine_draw" }
 
-local modules: { [string]: any } = {}
-local complete: { [string]: boolean } = {}
+local done: { [string]: any } = {} -- file -> its module, once loaded
 
 -- Whether the scene's code is fully loaded, so `make` is cheap.
 function M.loaded(name: string): boolean
 	local m = MODULE[name]
-	return m ~= nil and complete[m] == true
+	if not m then
+		return false
+	end
+	local steps = STEPS[m]
+	return done[steps[#steps]] ~= nil
 end
 
--- Loads the next piece of the scene's code (the slow part): one module, or
--- one half of a split one, per call. Call until `loaded` is true.
+-- Loads the next file of the scene's code (the slow part), one per call.
+-- Call until `loaded` is true.
 function M.load(name: string)
 	local m = MODULE[name]
 	if not m then
 		error("unknown scene " .. tostring(name))
 	end
-	if complete[m] then
-		return
+	for _, file in STEPS[m] do
+		if done[file] == nil then
+			local mod = FILES[file]()
+			if SECOND[m] == file then
+				mod(done[m].__drawEnv)
+				mod = true
+			end
+			done[file] = mod
+			return
+		end
 	end
-	if not modules[m] then
-		modules[m] = LOADERS[m]()
-		complete[m] = SECOND[m] == nil
-		return
-	end
-	SECOND[m]()(modules[m].__drawEnv)
-	complete[m] = true
 end
 
 function M.make(name: string, seed: number?): any
 	while not M.loaded(name) do
 		M.load(name)
 	end
-	local mod = modules[MODULE[name]]
-	if name == "falcon" then
-		return mod.falcon(seed)
-	elseif name == "starship" then
-		return mod.starship(seed)
-	end
-	return mod.make(seed)
+	return done[MODULE[name]].make(seed)
 end
 
 return M

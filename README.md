@@ -14,14 +14,17 @@ Ogni tile mostra:
   contesto quasi pieno; si calma e respira quando omp aspetta una tua risposta. Da inattivo resta al minimo (nel
   fuoco, il lumino blu).
 
-Ogni tile ha la sua scena: `fire` (predefinita), `warp`, `avalon`, `engine`, `falcon`, `starship`, `bubbles`.
-`falcon` e `starship` hanno anche la versione notturna, che segue l'orologio come in Flow (dalle 19 alle 7).
+Ogni tile ha la sua scena: `fire` (predefinita), `warp`, `avalon`, `engine`, `bubbles`.
 
 ## Installazione
 
 ```sh
-tern plugin install github.com/<utente>/omp-tiles
+tern plugin install github.com/MrsKugla/omp-tiles-plugin
 ```
+
+Oppure, da una copia della repo, lancia l'installer: `install.bat` su Windows (anche con doppio clic), `./install.sh`
+su macOS e Linux. Copia la cartella nei plugin di Tern; rilancialo per aggiornare. Se il plugin è collegato con
+`tern plugin link`, prima scollegalo con `tern plugin unlink omp-tiles`.
 
 Per lavorarci sopra, clona la repo e collegala: Tern ricarica il plugin a ogni salvataggio.
 
@@ -65,8 +68,8 @@ La scorciatoia non è Ctrl+Shift+R perché Tern la usa già per lo zoom del pann
 - Le scene si animano solo nella copia che hai davanti, al ritmo di Flow (un fotogramma ogni 70 ms, 125 da
   calme). Tern dà a un plugin 50 ms per volta: se molti tile non ci stanno insieme, ognuno rallenta un po'
   invece di bloccare la finestra. Quando nessuna copia è visibile i dati si aggiornano ogni 1,5 secondi.
-- Le scene `balloon`, `surf`, `ski` e `train` di Flow non ci sono: dentro Tern sono troppo pesanti per il
-  ritmo di Flow.
+- Le scene `balloon`, `falcon`, `starship`, `surf`, `ski` e `train` di Flow non ci sono: dentro Tern sono troppo
+  pesanti per il ritmo di Flow.
 - I tile non si trascinano col mouse e non si ridimensionano tirando un bordo: Tern dà ai plugin solo clic,
   doppio clic e menu del tasto destro. Per questo spostamento e dimensioni sono nel menu.
 - La larghezza del blocco è letta con `tern ls --json` ogni 2 secondi, perché l'API dei plugin non la fornisce.
@@ -75,9 +78,9 @@ La scorciatoia non è Ctrl+Shift+R perché Tern la usa già per lo zoom del pann
 
 Le scene sono una conversione in Luau di quelle di [Flow](https://github.com/robdmac/flow) di Rob Macrae, riga
 per riga: per lo stesso seme e gli stessi comandi danno gli stessi fotogrammi dell'originale. La cartella `flow/`
-deriva da `hooks/` di Flow (`cells.ts`, `pixels.ts`, `night.ts`, `waiting.ts`, `sound.ts`, `fire.ts`,
-`fire-palette.ts`, `styles.ts`, `starfield.ts`, `colony.ts`, `engine.ts`, `rocket.ts`, `sky.ts`,
-`clouds/layered.ts`, `bubbles.ts`); il modello di attività in `window.luau` deriva da `hooks/activity.ts`. Flow è
+deriva da `hooks/` di Flow (`cells.ts`, `pixels.ts`, `waiting.ts`, `sound.ts`, `fire.ts`, `fire-palette.ts`,
+`styles.ts`, `starfield.ts`, `colony.ts`, `engine.ts`, `bubbles.ts`); il modello di attività in `window.luau`
+deriva da `hooks/activity.ts`. Flow è
 distribuito con la seguente licenza:
 
 ```text

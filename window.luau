@@ -21,8 +21,8 @@ local MIN_COLS, MAX_COLS = 2, 8
 local MAX_ROWS = 2
 local FRAME_MS, CALM_FRAME_MS = 70, 125 -- Flow's pace: busy, and calm (low and untinted)
 local MAX_CATCHUP = 3 -- frames a scene may step at once to catch up after a slow pass
-local PASS_BUDGET_MS = 30 -- scene work per pass, under Tern's 50 ms per call
-local LOAD_SLACK_MS = 2 -- a scene's code (up to ~42 ms to compile in Tern) loads only this early in a pass
+local PASS_BUDGET_MS = 20 -- scene work per pass, well under Tern's 50 ms per call
+local LOAD_SLACK_MS = 2 -- a file of a scene's code (up to ~20 ms to compile in Tern) loads only this early in a pass
 local HIDDEN_MS = 1500
 local POLL_MS = 1000
 local SIZE_MS = 2000
@@ -490,8 +490,9 @@ local function sceneFor(t: Tile, cols: number, cells: number, start: number, dea
 	end
 	if not s or t.sceneName ~= name then
 		if not scenes.loaded(name) then
-			-- Compiling a scene's code is the slow part (up to ~40 ms): only on a
-			-- pass that has done almost nothing yet, and then the pass stops.
+			-- Compiling a scene's code is the slow part (up to ~20 ms a file):
+			-- one file, only on a pass that has done almost nothing yet, and
+			-- then the pass stops.
 			if tern.now() - start <= LOAD_SLACK_MS then
 				scenes.load(name)
 			end
