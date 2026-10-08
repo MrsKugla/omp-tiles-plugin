@@ -1,0 +1,97 @@
+/* omp Tiles: the canvas is the native block `tern.canvas`; scope by our own classes. */
+
+/* The invisible grid: window.luau picks the column count (.omt-c2 … .omt-c8)
+   from the block's width, at least two. */
+.omt-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+	padding: 2px;
+}
+.omt-grid.omt-c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.omt-grid.omt-c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.omt-grid.omt-c5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.omt-grid.omt-c6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.omt-grid.omt-c7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.omt-grid.omt-c8 { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+
+/* How many columns and rows a tile takes (right-click › Wider, Taller, …). */
+.omt-tile.omt-w2 { grid-column: span 2; }
+.omt-tile.omt-w3 { grid-column: span 3; }
+.omt-tile.omt-w4 { grid-column: span 4; }
+.omt-tile.omt-w5 { grid-column: span 5; }
+.omt-tile.omt-w6 { grid-column: span 6; }
+.omt-tile.omt-w7 { grid-column: span 7; }
+.omt-tile.omt-w8 { grid-column: span 8; }
+.omt-tile.omt-h2 { grid-row: span 2; }
+
+.omt-tile {
+	--omt-c: var(--t4);
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 8px 10px 6px;
+	border-radius: var(--r-card);
+	background: var(--card);
+	box-shadow: inset 0 0 0 1px var(--l2);
+	cursor: pointer;
+	transition: box-shadow 160ms var(--ease), background 160ms var(--ease);
+	min-width: 0;
+	overflow: hidden;
+}
+
+.omt-tile:hover {
+	box-shadow: inset 0 0 0 1px var(--l4);
+}
+
+/* A colored tile reads like a colored tab: a tinted fill and a ring of its color. */
+.omt-tile.omt-red { --omt-c: #ff3b30; }
+.omt-tile.omt-orange { --omt-c: #ff9500; }
+.omt-tile.omt-yellow { --omt-c: #e0a800; }
+.omt-tile.omt-green { --omt-c: #34c759; }
+.omt-tile.omt-teal { --omt-c: #30b0c7; }
+.omt-tile.omt-blue { --omt-c: #007aff; }
+.omt-tile.omt-purple { --omt-c: #af52de; }
+.omt-tile.omt-pink { --omt-c: #ff2d55; }
+
+.omt-tile.omt-red, .omt-tile.omt-orange, .omt-tile.omt-yellow, .omt-tile.omt-green,
+.omt-tile.omt-teal, .omt-tile.omt-blue, .omt-tile.omt-purple, .omt-tile.omt-pink {
+	background: color-mix(in srgb, var(--omt-c) 16%, var(--card));
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--omt-c) 55%, transparent);
+}
+
+.omt-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.omt-dot {
+	flex: none;
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	background: var(--omt-c);
+}
+
+.omt-facts {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+}
+
+.omt-fire {
+	margin-top: 2px;
+	border-radius: 6px;
+	background: #0d0e12;
+	padding: 2px 4px;
+	line-height: 1;
+	overflow: hidden;
+}
+
+.omt-fire .sf-ansi {
+	background: transparent;
+	line-height: 1;
+}
