@@ -6,7 +6,8 @@
 -- Each Tern session gets its own copy of the block; all copies show the same
 -- tiles, colors, scenes, order and sizes. The tiles sit in an invisible grid
 -- of at least two columns, more as the block widens. Click a tile to go
--- there; right-click it to pick its scene, color, move or resize it.
+-- there; its sliders icon (or right-click > Personalizza) opens a panel to
+-- pick its scene and color, resize it on a small grid or move it.
 
 local scenes = require("./flow/scenes")
 local DEFAULT_COLOR = require("./flow/cells").DEFAULT_COLOR
@@ -22,11 +23,23 @@ local MAX_ROWS = 2
 local FRAME_MS, CALM_FRAME_MS = 70, 125 -- Flow's pace: busy, and calm (low and untinted)
 local MAX_CATCHUP = 3 -- frames a scene may step at once to catch up after a slow pass
 local PASS_BUDGET_MS = 20 -- scene work per pass, well under Tern's 50 ms per call
-local LOAD_SLACK_MS = 2 -- a file of a scene's code (up to ~20 ms to compile in Tern) loads only this early in a pass
+-- Scenes too slow at full tile size, in cells: engine is ~22 ms a frame and
+-- over 50 ms to set up at 96x15 in Tern, about half at 48x15.
+local MAX_AREA: { [string]: number } = { engine = 48 * 15 }
 local HIDDEN_MS = 1500
 local POLL_MS = 1000
 local SIZE_MS = 2000
 local COLORS = { "red", "orange", "yellow", "green", "teal", "blue", "purple", "pink" }
+local SLOW_OP_MS = 8 -- diagnostics: log any single step slower than this (Tern stops the timer at 50 ms)
+local SLOW_PASS_MS = 25 -- diagnostics: log any loop pass slower than this
+
+-- Logs a slow step to tern.log, so a budget trip can be traced to its cause.
+local function slow(what: string, t0: number)
+	local dt = tern.now() - t0
+	if dt >= SLOW_OP_MS then
+		tern.log.warn(string.format("omp-tiles slow: %s %.1f ms", what, dt))
+	end
+end
 
 -- Activity: Flow's work -> level model (hooks/activity.ts), fed from what
 -- Tern reports about each agent block instead of Claude Code hooks.
@@ -35,6 +48,7 @@ type Tile = {
 	scene: any,
 	sceneName: string?,
 	frameAt: number?,
+	frameCost: number?, -- ms its last frame took (step + drawing), to plan a pass
 	frame: string?,
 	heat: number,
 	floor: number,
@@ -47,6 +61,7 @@ type Tile = {
 	ctx: number?,
 	ctxLabel: string?,
 	effort: string?,
+	ompTitle: string?,
 	seen: { [string]: boolean },
 	seenN: number,
 	primed: boolean,
@@ -67,6 +82,7 @@ local lastFrame = tern.now()
 local loopArmed = false
 local waitOpen = 0 -- loop passes left to find a copy just opened
 local nextTile = 1 -- where the next pass starts stepping scenes
+local workedThisPass = false -- a render pass compiled or set up a scene: it does nothing else heavy
 local setupPending = false -- the view needs rebuilding (and scenes setting up) on the next pass
 
 local EFFORT_FLOOR = { minimal = 2, low = 2, medium = 3, high = 4, xhigh = 5, max = 6 }
@@ -158,6 +174,52 @@ local function surfaceProp(cx: WindowCx, pane: number, root: string): { [string]
 	return if type(node) == "table" and type(node.p) == "table" then node.p else nil
 end
 
+-- omp shows the session title as its input's placeholder: in curly quotes,
+-- led by an icon glyph; Tern's agent title is only the shell's. Returns
+-- nil for any other placeholder.
+local function sessionTitle(placeholder: any): string?
+	local text = placeholder
+	if type(placeholder) == "table" then
+		local parts = {}
+		for _, s in placeholder do
+			if type(s) == "table" and type(s.t) == "string" then
+				table.insert(parts, s.t)
+			end
+		end
+		text = table.concat(parts)
+	end
+	if type(text) ~= "string" or not utf8.len(text) then
+		return nil
+	end
+	local inner = string.match(text, "^%s*“(.*)”%s*$")
+	if not inner then
+		return nil
+	end
+	local kept = {}
+	for _, c in utf8.codes(inner) do
+		-- Drop icon glyphs: the Private Use Areas.
+		if not ((c >= 0xE000 and c <= 0xF8FF) or c >= 0xF0000) then
+			table.insert(kept, utf8.char(c))
+		end
+	end
+	return str(string.match(table.concat(kept), "^%s*(.-)%s*$"))
+end
+
+local PATH_LEVELS = 4 -- a tile shows only the last levels of its directory
+
+-- The last PATH_LEVELS directories of a path, led by "…" when cut.
+local function shortPath(path: string): string
+	local sep = if string.find(path, "\\", 1, true) then "\\" else "/"
+	local parts = {}
+	for part in string.gmatch(path, "[^\\/]+") do
+		table.insert(parts, part)
+	end
+	if #parts <= PATH_LEVELS then
+		return path
+	end
+	return "…" .. sep .. table.concat(parts, sep, #parts - PATH_LEVELS + 1)
+end
+
 local function poll(cx: WindowCx)
 	local sessions: { [number]: string } = {}
 	local sorder: { [number]: number } = {}
@@ -205,13 +267,21 @@ local function poll(cx: WindowCx)
 		end
 		local tab = if type(a.tab) == "number" then tabs[a.tab] else nil
 		local state = str(a.state) or "idle"
+		-- Tern's state comes from omp's progress escape, which can stay on after a
+		-- turn ends; `busy` follows the turn itself, so it wins when present.
+		if state == "working" and a.busy == false then
+			state = "idle"
+		end
 		local wasTurn = t.turn
 		t.turn = state == "working"
 		t.waiting = state == "waiting_input"
 		if t.turn and not wasTurn then
 			t.turnMs = 0
 		end
-		-- Model, effort and context, as omp's composer shows them.
+		-- Session title, model, effort and context, as omp's composer shows them.
+		local omp = surfaceProp(cx, pane, "3.line/input")
+		t.ompTitle = if omp then sessionTitle(omp.placeholder) else nil
+		local tOp = tern.now()
 		local ctx = surfaceProp(cx, pane, "3.context")
 		if ctx and type(ctx.value) == "number" then
 			local prev = t.ctx
@@ -224,12 +294,15 @@ local function poll(cx: WindowCx)
 			end
 		end
 		local eff = surfaceProp(cx, pane, "3.bar/model/effort")
+		slow("surface pane " .. tostring(pane), tOp)
 		t.effort = if eff then str(eff.level) else nil
 		t.floor = if t.effort then (EFFORT_FLOOR[t.effort] or 3) else 3
 		-- Tool calls and streamed text since the last poll.
+		tOp = tern.now()
 		local okT, msgs = pcall(function()
 			return cx.agents:transcript(pane, { last = 4 })
 		end)
+		slow("transcript pane " .. tostring(pane), tOp)
 		local inFlight, subagents = 0, 0
 		local working = t.turn or t.subagents > 0
 		if okT and type(msgs) == "table" then
@@ -307,7 +380,7 @@ local function poll(cx: WindowCx)
 			sessionOrder = if session then (sorder[session] or 99) else 99,
 			tabPos = if tab then tab.position else 99,
 			tabColor = if tab then tab.color else nil,
-			title = str(a.title) or (tab and str(tab.name)) or "omp",
+			title = t.ompTitle or str(a.title) or (tab and str(tab.name)) or "omp",
 			cwd = str(a.cwd) or "",
 			model = str(a.model),
 			state = state,
@@ -392,20 +465,122 @@ local function sceneOf(t: Tile): string
 	return "fire"
 end
 
--- Menu labels come from the action names: `scene-engine` reads "Scene engine".
-local function menu(): { string }
-	local items = {}
+-- A tile's look as copied by "Copia stile": its scene and color, kept in
+-- tern.kv so every copy of the block (and a restart) can paste it.
+type Style = { scene: string, color: string }
+
+local function copiedStyle(): Style?
+	local s = tern.kv.get("style-clip")
+	if type(s) == "table" and type(s.scene) == "string" and type(s.color) == "string" then
+		return s :: any
+	end
+	return nil
+end
+
+-- The right-click menu (Tern adds its own Copy, of the tile's text, after
+-- it). Labels come from the action names: "copia-stile" reads "Copia stile".
+-- "Incolla stile" shows only once a style has been copied.
+local function menuFor(canPaste: boolean): { string }
+	if canPaste then
+		return { "personalizza", "copia-stile", "incolla-stile" }
+	end
+	return { "personalizza", "copia-stile" }
+end
+
+-- Each scene's icon in the options panel (Tern's icon set).
+local SCENE_ICON: { [string]: string } = {
+	fire = "flame",
+	warp = "sparkle",
+	avalon = "globe",
+	engine = "rocket",
+	bubbles = "wave",
+}
+
+-- Tiles whose options panel is open, in this window only.
+local optsOpen: { [number]: boolean } = {}
+
+-- The options panel: scene, color, size and position, each a row of
+-- buttons. Size is a small grid as wide as the block's columns: the cell
+-- clicked is the tile's new bottom-right corner.
+local function optsNode(t: Tile, cols: number): Node
+	local current = sceneOf(t)
+	local color = colorOf(t)
+	local w, h = spanOf(t)
+	w = math.min(w, cols)
+	local sceneKids = {}
 	for _, s in scenes.NAMES do
-		table.insert(items, "scene-" .. s)
+		table.insert(sceneKids, ui.el("button", {
+			key = s,
+			class = "omt-opt" .. (if s == current then " omt-on" else ""),
+			title = "Scena " .. s,
+			actions = { click = "scene=" .. s },
+		}, {
+			ui.node("icon", { key = "i", name = SCENE_ICON[s] or "flame" }),
+			ui.el("span", { key = "t", text = s }),
+		}))
 	end
-	for _, a in { "move-left", "move-right", "wider", "narrower", "taller", "shorter" } do
-		table.insert(items, a)
-	end
+	local colorKids = {
+		ui.el("button", {
+			key = "none",
+			class = "omt-sw omt-sw-none" .. (if color == nil then " omt-on" else ""),
+			title = "Nessun colore",
+			actions = { click = "color=none" },
+		}, { ui.node("icon", { key = "i", name = "slash-circle" }) }),
+	}
 	for _, c in COLORS do
-		table.insert(items, "color-" .. c)
+		table.insert(colorKids, ui.el("button", {
+			key = c,
+			class = "omt-sw omt-" .. c .. (if c == color then " omt-on" else ""),
+			title = c,
+			actions = { click = "color=" .. c },
+		}))
 	end
-	table.insert(items, "color-none")
-	return items
+	local cells = {}
+	for r = 1, MAX_ROWS do
+		for c = 1, cols do
+			local size = tostring(c) .. "x" .. tostring(r)
+			table.insert(cells, ui.el("button", {
+				key = "s" .. size,
+				class = "omt-cell" .. (if c <= w and r <= h then " omt-on" else ""),
+				title = tostring(c) .. " × " .. tostring(r),
+				actions = { click = "size=" .. size },
+			}))
+		end
+	end
+	local function row(key: string, icon: string, label: string, kids: { Node }): Node
+		return ui.el("div", { key = key, class = "omt-optrow" }, {
+			ui.el("div", { key = "l", class = "omt-optlabel" }, {
+				ui.node("icon", { key = "i", name = icon }),
+				ui.el("span", { key = "t", text = label }),
+			}),
+			ui.el("div", { key = "c", class = "omt-optctl" }, kids),
+		})
+	end
+	return ui.el("div", {
+		key = "opts",
+		class = "omt-opts",
+		-- Clicks between the buttons must not take you to the session.
+		actions = { click = "noop" },
+	}, {
+		row("scene", "reel", "Scena", sceneKids),
+		row("color", "palette", "Colore", colorKids),
+		row("size", "grid", "Dimensione", {
+			ui.el("div", { key = "grid", class = "omt-sizegrid omt-c" .. tostring(cols) }, cells),
+			ui.el("span", { key = "n", class = "omt-sizelabel", text = tostring(w) .. " × " .. tostring(h) }),
+		}),
+		row("move", "swap", "Posizione", {
+			ui.el("button", { key = "l", class = "omt-opt", title = "Sposta a sinistra", actions = { click = "move=-1" } }, {
+				ui.node("icon", { key = "i", name = "arrow-left" }),
+			}),
+			ui.el("button", { key = "r", class = "omt-opt", title = "Sposta a destra", actions = { click = "move=1" } }, {
+				ui.node("icon", { key = "i", name = "arrow-right" }),
+			}),
+			ui.el("button", { key = "x", class = "omt-opt omt-close", title = "Chiudi", actions = { click = "personalizza" } }, {
+				ui.node("icon", { key = "i", name = "check" }),
+				ui.el("span", { key = "t", text = "Fatto" }),
+			}),
+		}),
+	})
 end
 
 -- Flow's clock: night from 19:00 to 7:00 (local time).
@@ -480,6 +655,12 @@ local function sceneFor(t: Tile, cols: number, cells: number, start: number, dea
 	local sw = math.max(16, math.floor(cells / cols * span) - 8)
 	local sh = SCENE_H + (h - 1) * SCENE_H_STEP
 	local name = sceneOf(t)
+	-- A heavy scene's cost grows with its area: past MAX_AREA it stays this
+	-- big, narrower than the tile and centered in it.
+	local maxArea = MAX_AREA[name]
+	if maxArea and sw * sh > maxArea then
+		sw = math.max(16, math.floor(maxArea / sh))
+	end
 	local s = t.scene
 	local stale = not s or t.sceneName ~= name or s.columns ~= sw or s.rows ~= sh or not t.frame
 	if not stale then
@@ -488,16 +669,23 @@ local function sceneFor(t: Tile, cols: number, cells: number, start: number, dea
 	if tern.now() > deadline then
 		return false
 	end
+	-- One heavy step per pass: compiling a scene file (up to ~25 ms) or
+	-- setting a scene up (up to ~40 ms for a big engine) leaves no room for
+	-- a second one, or for sending the view, inside Tern's 50 ms.
+	if workedThisPass then
+		return false
+	end
+	workedThisPass = true
 	if not s or t.sceneName ~= name then
 		if not scenes.loaded(name) then
-			-- Compiling a scene's code is the slow part (up to ~20 ms a file):
-			-- one file, only on a pass that has done almost nothing yet, and
-			-- then the pass stops.
-			if tern.now() - start <= LOAD_SLACK_MS then
-				scenes.load(name)
-			end
+			tern.log.warn("omp-tiles compile " .. name) -- logged before: names the step if Tern stops the timer
+			scenes.load(name)
 			return false
 		end
+	end
+	local tOp = tern.now()
+	tern.log.warn(string.format("omp-tiles setup %s %dx%d", name, sw, sh))
+	if not s or t.sceneName ~= name then
 		s = scenes.make(name, math.floor(tern.now()) + t.pane % 100000)
 		t.scene = s
 		t.sceneName = name
@@ -507,10 +695,11 @@ local function sceneFor(t: Tile, cols: number, cells: number, start: number, dea
 	dial(t)
 	s:step()
 	t.frame = ansi(s:grid())
+	slow(string.format("setup %s %dx%d", name, sw, sh), tOp)
 	return true
 end
 
-local function tileNode(t: Tile, cols: number): Node
+local function tileNode(t: Tile, cols: number, menu: { string }): Node
 	local i = t.info
 	local color = colorOf(t)
 	local w, h = spanOf(t)
@@ -527,12 +716,19 @@ local function tileNode(t: Tile, cols: number): Node
 		grow = 1,
 	})
 	local class = "omt-tile omt-w" .. tostring(math.min(w, cols)) .. " omt-h" .. tostring(h)
-	return ui.el("div", {
-		key = "p" .. tostring(t.pane),
-		class = class .. (if color then " omt-" .. color else ""),
-		title = i.cwd,
-		actions = { click = "go=" .. tostring(t.pane), menu = menu() },
-	}, {
+	-- /compact buttons: live only while omp is idle; otherwise greyed, and a
+	-- click just says why.
+	local idle = i.state == "idle"
+	local function compactButton(key: string, label: string, command: string): Node
+		return ui.el("button", {
+			key = key,
+			class = "omt-btn" .. (if idle then "" else " omt-btn-off"),
+			text = label,
+			title = if idle then command else command .. " (solo con omp fermo)",
+			actions = { click = (if idle then key else "busy") .. "=" .. tostring(t.pane) },
+		})
+	end
+	local kids = {
 		ui.el("div", { key = "head", class = "omt-head" }, {
 			ui.el("span", { key = "dot", class = "omt-dot" }),
 			ui.node("text", {
@@ -541,33 +737,56 @@ local function tileNode(t: Tile, cols: number): Node
 				truncate = "end",
 				grow = 1,
 				spans = {
-					ui.span(i.sessionName or "?", "muted"),
-					ui.span(" → ", "dim"),
 					ui.span(i.title, "strong"),
 				},
 			}),
 			ui.node("badge", { key = "state", text = st[1], tone = st[2] }),
+			ui.el("button", {
+				key = "opts",
+				class = "omt-optbtn",
+				title = "Personalizza",
+				actions = { click = "personalizza" },
+			}, { ui.node("icon", { key = "i", name = "sliders" }) }),
 		}),
-		ui.node("text", {
-			key = "cwd",
-			wrap = "none",
-			truncate = "middle",
-			spans = { ui.span(i.cwd, "path") },
+		ui.el("div", { key = "where", class = "omt-where" }, {
+			ui.el("div", { key = "cwd", class = "omt-cwd" }, {
+				ui.node("text", {
+					key = "path",
+					wrap = "none",
+					truncate = "start",
+					spans = { ui.span(shortPath(i.cwd), "path") },
+				}),
+			}),
+			ui.el("span", { key = "session", class = "omt-session", text = i.sessionName or "" }),
 		}),
 		ui.el("div", { key = "facts", class = "omt-facts" }, {
 			ui.node("text", { key = "model", wrap = "none", spans = { ui.span(model, "accent") } }),
 			meter,
 		}),
-		ui.el("div", { key = "flame", class = "omt-fire" }, { sceneNode(t) }),
-	})
+		ui.el("div", { key = "acts", class = "omt-acts" }, {
+			compactButton("compact", "compact", "/compact"),
+			compactButton("snapcompact", "snapcompact", "/compact snapcompact"),
+		}),
+	}
+	if optsOpen[t.pane] then
+		table.insert(kids, optsNode(t, cols))
+	end
+	table.insert(kids, ui.el("div", { key = "flame", class = "omt-fire" }, { sceneNode(t) }))
+	return ui.el("div", {
+		key = "p" .. tostring(t.pane),
+		class = class .. (if color then " omt-" .. color else ""),
+		title = i.cwd,
+		actions = { click = "go=" .. tostring(t.pane), menu = menu },
+	}, kids)
 end
 
 -- The grid: `cols` equal columns (explicit tracks: Tern's CSS has no
 -- auto-fill); a tile spans its own columns and rows.
 local function view(cols: number): Node
 	local kids = {}
+	local menu = menuFor(copiedStyle() ~= nil)
 	for _, pane in order do
-		table.insert(kids, tileNode(tiles[pane], cols))
+		table.insert(kids, tileNode(tiles[pane], cols, menu))
 	end
 	if #kids == 0 then
 		table.insert(kids, ui.node("text", { key = "empty", spans = { ui.span("Nessuna sessione omp aperta in Tern.", "muted") } }))
@@ -650,16 +869,22 @@ local function render(cx: WindowCx, pane: number, start: number)
 	local cols = colsFor(cells)
 	local deadline = start + PASS_BUDGET_MS
 	local pending = false
+	workedThisPass = false
 	for _, p in order do
 		if not sceneFor(tiles[p], cols, cells, start, deadline) then
 			pending = true
-			break -- out of budget, or a module loading: the rest on the next pass
+			break -- a heavy step already done: the rest on the next pass
 		end
 	end
-	cx.canvas:set(pane, { view = view(cols) })
-	if pending then
+	-- A pass that compiled or set up a scene leaves the view for the next
+	-- one (sending it costs up to ~35 ms); the old view stays meanwhile.
+	if pending or workedThisPass then
 		setupPending = true
+		return
 	end
+	local tSet = tern.now()
+	cx.canvas:set(pane, { view = view(cols) })
+	slow("render view+set", tSet)
 end
 
 local loop: (cx: WindowCx?) -> ()
@@ -693,6 +918,8 @@ loop = function(cx: WindowCx?)
 	end
 	waitOpen = 0
 	local now = tern.now()
+	local passStart = now
+	local phase = "anim"
 	local ms = math.min(1000, now - lastFrame)
 	lastFrame = now
 	local pane = onScreen(cx, all)
@@ -712,9 +939,11 @@ loop = function(cx: WindowCx?)
 		-- Read the agents; the view is rebuilt on the next pass, with its own budget.
 		lastPoll = now
 		poll(cx)
+		phase = "poll"
 		setupPending = pane ~= nil
 	elseif pane and setupPending then
 		setupPending = false
+		phase = "render"
 		render(cx, pane, tern.now())
 	elseif pane then
 		-- Each scene moves at Flow's pace (a frame every 70 ms, 125 when calm)
@@ -731,13 +960,27 @@ loop = function(cx: WindowCx?)
 			if t and t.scene then
 				local pace = if t.scene.strength <= 1 and t.scene.tint == "normal" then CALM_FRAME_MS else FRAME_MS
 				local due = math.min(MAX_CATCHUP, (now - (t.frameAt or now - pace)) // pace)
+				local cost = t.frameCost or 0
+				-- A frame that would not fit what is left of the budget waits for
+				-- the next pass, which starts with it (an engine frame alone can
+				-- take ~22 ms); a slow scene does not catch up on missed frames.
+				if due >= 1 and tern.now() - start > 0.5 and tern.now() - start + cost > PASS_BUDGET_MS then
+					nextTile = idx
+					break
+				end
+				if cost > PASS_BUDGET_MS / 4 then
+					due = math.min(due, 1)
+				end
 				if due >= 1 then
+					local tFrame = tern.now()
 					dial(t)
 					for _ = 1, due do
 						t.scene:step()
 					end
 					t.frameAt = now
 					patch["p" .. tostring(p) .. ".flame.fire"] = sceneNode(t, true)
+					t.frameCost = (tern.now() - tFrame) / due
+					slow("frame " .. tostring(t.sceneName), tFrame)
 				end
 			end
 			if tern.now() - start > PASS_BUDGET_MS then
@@ -746,8 +989,14 @@ loop = function(cx: WindowCx?)
 			end
 		end
 		if next(patch) then
+			local tSet = tern.now()
 			cx.canvas:set(pane, { set = patch })
+			slow("anim set", tSet)
 		end
+	end
+	local passMs = tern.now() - passStart
+	if passMs >= SLOW_PASS_MS then
+		tern.log.warn(string.format("omp-tiles slow pass: %s %.1f ms, %d tiles", phase, passMs, #order))
 	end
 	arm(if pane then FRAME_MS else HIDDEN_MS)
 end
@@ -803,27 +1052,14 @@ local function move(pane: number, by: number)
 	end
 end
 
-local function resize(pane: number, axis: string, by: number)
-	local t = tiles[pane]
-	if not t then
-		return
-	end
-	local w, h = spanOf(t)
-	if axis == "w" then
-		tern.kv.set("w:" .. tostring(pane), math.clamp(w + by, 1, MAX_COLS))
-	else
-		tern.kv.set("h:" .. tostring(pane), math.clamp(h + by, 1, MAX_ROWS))
+-- The tile's new size from the options panel's grid: columns × rows.
+local function resize(pane: number, size: string)
+	local w, h = string.match(size, "^(%d+)x(%d+)$")
+	if w and h then
+		tern.kv.set("w:" .. tostring(pane), math.clamp(tonumber(w) :: number, 1, MAX_COLS))
+		tern.kv.set("h:" .. tostring(pane), math.clamp(tonumber(h) :: number, 1, MAX_ROWS))
 	end
 end
-
-local ACTIONS: { [string]: (number) -> () } = {
-	["move-left"] = function(p) move(p, -1) end,
-	["move-right"] = function(p) move(p, 1) end,
-	wider = function(p) resize(p, "w", 1) end,
-	narrower = function(p) resize(p, "w", -1) end,
-	taller = function(p) resize(p, "h", 1) end,
-	shorter = function(p) resize(p, "h", -1) end,
-}
 
 tern.on("canvas_action", function(ev: CanvasAction, cx: WindowCx): boolean?
 	local mine = false
@@ -844,19 +1080,69 @@ tern.on("canvas_action", function(ev: CanvasAction, cx: WindowCx): boolean?
 		end
 		return true
 	end
+	local COMPACT = { compact = "/compact", snapcompact = "/compact snapcompact" }
+	if (COMPACT[ev.act] or ev.act == "busy") and ev.value then
+		local target = tonumber(ev.value)
+		local t = target and tiles[target]
+		if not (target and t) then
+			return true
+		end
+		-- The state may have changed since the view was drawn: check it again.
+		if ev.act == "busy" or t.info.state ~= "idle" then
+			cx:toast("info", "omp sta lavorando", "Compact solo quando la sessione è ferma.")
+			return true
+		end
+		local ok, err = pcall(function()
+			cx.agents:ask(target, COMPACT[ev.act])
+		end)
+		if ok then
+			cx:toast("info", COMPACT[ev.act] .. " inviato", t.info.title)
+			lastPoll = -math.huge
+			arm(0)
+		else
+			cx:toast("error", "Compact non inviato", tostring(err))
+		end
+		return true
+	end
 	local paneStr = string.match(ev.node, "%f[%w]p(%d+)")
 	local pane = paneStr and tonumber(paneStr)
 	if not paneStr or not pane then
 		return false
 	end
-	local color = string.match(ev.act, "^color%-(%a+)$")
-	local scene = string.match(ev.act, "^scene%-(%a+)$")
-	if color then
-		tern.kv.set("color:" .. paneStr, color)
-	elseif scene then
-		tern.kv.set("scene:" .. paneStr, scene)
-	elseif ACTIONS[ev.act] then
-		ACTIONS[ev.act](pane)
+	local value = ev.value or ""
+	if ev.act == "noop" then
+		return true
+	elseif ev.act == "personalizza" then
+		optsOpen[pane] = not optsOpen[pane]
+	elseif ev.act == "copia-stile" then
+		local t = tiles[pane]
+		if not t then
+			return true
+		end
+		local style: Style = { scene = sceneOf(t), color = colorOf(t) or "none" }
+		tern.kv.set("style-clip", style)
+		cx:toast("info", "Stile copiato", style.scene .. ", " .. (if style.color == "none" then "nessun colore" else style.color))
+	elseif ev.act == "incolla-stile" then
+		local style = copiedStyle()
+		if not style then
+			return true
+		end
+		if table.find(scenes.NAMES, style.scene) then
+			tern.kv.set("scene:" .. paneStr, style.scene)
+		end
+		if style.color == "none" or table.find(COLORS, style.color) then
+			tern.kv.set("color:" .. paneStr, style.color)
+		end
+		-- One paste per copy: pasting again needs a new "Copia stile".
+		tern.kv.set("style-clip", nil)
+	elseif ev.act == "color" and (value == "none" or table.find(COLORS, value)) then
+		tern.kv.set("color:" .. paneStr, value)
+	elseif ev.act == "scene" and table.find(scenes.NAMES, value) then
+		tern.kv.set("scene:" .. paneStr, value)
+	elseif ev.act == "size" then
+		resize(pane, value)
+	elseif ev.act == "move" and tonumber(value) then
+		move(pane, tonumber(value) :: number)
 	else
 		return false
 	end

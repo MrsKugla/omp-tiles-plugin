@@ -44,15 +44,16 @@
 	box-shadow: inset 0 0 0 1px var(--l4);
 }
 
-/* A colored tile reads like a colored tab: a tinted fill and a ring of its color. */
-.omt-tile.omt-red { --omt-c: #ff3b30; }
-.omt-tile.omt-orange { --omt-c: #ff9500; }
-.omt-tile.omt-yellow { --omt-c: #e0a800; }
-.omt-tile.omt-green { --omt-c: #34c759; }
-.omt-tile.omt-teal { --omt-c: #30b0c7; }
-.omt-tile.omt-blue { --omt-c: #007aff; }
-.omt-tile.omt-purple { --omt-c: #af52de; }
-.omt-tile.omt-pink { --omt-c: #ff2d55; }
+/* A colored tile reads like a colored tab: a tinted fill and a ring of its color.
+   The color classes also tint the swatches of the options panel. */
+.omt-red { --omt-c: #ff3b30; }
+.omt-orange { --omt-c: #ff9500; }
+.omt-yellow { --omt-c: #e0a800; }
+.omt-green { --omt-c: #34c759; }
+.omt-teal { --omt-c: #30b0c7; }
+.omt-blue { --omt-c: #007aff; }
+.omt-purple { --omt-c: #af52de; }
+.omt-pink { --omt-c: #ff2d55; }
 
 .omt-tile.omt-red, .omt-tile.omt-orange, .omt-tile.omt-yellow, .omt-tile.omt-green,
 .omt-tile.omt-teal, .omt-tile.omt-blue, .omt-tile.omt-purple, .omt-tile.omt-pink {
@@ -75,6 +76,60 @@
 	background: var(--omt-c);
 }
 
+/* Second row: the directory's last levels, the Tern session under the state badge. */
+.omt-where {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+/* The directory, a bit smaller than the rest of the tile. */
+.omt-cwd {
+	flex: 1;
+	min-width: 0;
+	font-size: 0.85em;
+}
+.omt-cwd * {
+	font-size: inherit;
+}
+
+/* The Tern session, in the tile's color. */
+.omt-session {
+	flex: none;
+	max-width: 45%;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	color: var(--omt-c);
+	font-weight: 600;
+}
+
+/* /compact buttons: live while omp is idle, greyed out otherwise. */
+.omt-acts {
+	display: flex;
+	gap: 6px;
+}
+.omt-btn {
+	padding: 1px 8px;
+	border-radius: 6px;
+	border: 1px solid color-mix(in srgb, var(--omt-c) 55%, transparent);
+	background: color-mix(in srgb, var(--omt-c) 14%, transparent);
+	color: inherit;
+	font-size: 0.85em;
+	cursor: pointer;
+}
+.omt-btn:hover {
+	background: color-mix(in srgb, var(--omt-c) 28%, transparent);
+}
+.omt-btn.omt-btn-off,
+.omt-btn.omt-btn-off:hover {
+	opacity: 0.35;
+	filter: grayscale(1);
+	background: transparent;
+	cursor: default;
+}
+
 .omt-facts {
 	display: flex;
 	align-items: center;
@@ -91,7 +146,146 @@
 	overflow: hidden;
 }
 
+/* A scene narrower than the tile (engine stops at 48x15 cells) sits centered. */
 .omt-fire .sf-ansi {
 	background: transparent;
 	line-height: 1;
+	width: fit-content;
+	margin: 0 auto;
+}
+
+/* The sliders icon in the header: opens the options panel. */
+.omt-optbtn {
+	display: flex;
+	padding: 2px;
+	border: none;
+	border-radius: 5px;
+	background: transparent;
+	color: var(--t3);
+	cursor: pointer;
+}
+.omt-optbtn:hover {
+	background: var(--l2);
+	color: var(--t1);
+}
+
+/* The options panel: one row per setting, label on the left. */
+.omt-opts {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 8px;
+	border-radius: 8px;
+	background: var(--card);
+	box-shadow: inset 0 0 0 1px var(--l2);
+	cursor: default;
+}
+.omt-optrow {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+}
+.omt-optlabel {
+	flex: none;
+	width: 92px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--t2);
+	font-size: 0.85em;
+}
+.omt-optctl {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+/* Scene and move buttons: icon + name, the current one ringed in the tile's color. */
+.omt-opt {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 8px;
+	border-radius: 6px;
+	border: 1px solid var(--l2);
+	background: transparent;
+	color: inherit;
+	font-size: 0.85em;
+	cursor: pointer;
+}
+.omt-opt:hover {
+	background: var(--l2);
+}
+.omt-opt.omt-on {
+	border-color: var(--omt-c);
+	background: color-mix(in srgb, var(--omt-c) 22%, transparent);
+}
+.omt-opt.omt-close {
+	margin-left: auto;
+}
+
+/* Color swatches: round dots, "none" a ringed slashed circle. */
+.omt-sw {
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: none;
+	border-radius: 50%;
+	background: var(--omt-c);
+	cursor: pointer;
+	transition: transform 120ms var(--ease);
+}
+.omt-sw:hover {
+	transform: scale(1.15);
+}
+.omt-sw.omt-on {
+	box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--omt-c);
+}
+.omt-sw.omt-sw-none {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: transparent;
+	color: var(--t3);
+	box-shadow: inset 0 0 0 1px var(--l4);
+}
+.omt-sw.omt-sw-none.omt-on {
+	box-shadow: inset 0 0 0 1px var(--l4), 0 0 0 2px var(--card), 0 0 0 4px var(--t3);
+}
+
+/* Size picker: one small cell per block column and tile row; the cells
+   up to the tile's size are filled. */
+.omt-sizegrid {
+	display: grid;
+	grid-template-columns: repeat(2, 16px);
+	gap: 3px;
+}
+.omt-sizegrid.omt-c3 { grid-template-columns: repeat(3, 16px); }
+.omt-sizegrid.omt-c4 { grid-template-columns: repeat(4, 16px); }
+.omt-sizegrid.omt-c5 { grid-template-columns: repeat(5, 16px); }
+.omt-sizegrid.omt-c6 { grid-template-columns: repeat(6, 16px); }
+.omt-sizegrid.omt-c7 { grid-template-columns: repeat(7, 16px); }
+.omt-sizegrid.omt-c8 { grid-template-columns: repeat(8, 16px); }
+.omt-cell {
+	width: 16px;
+	height: 12px;
+	padding: 0;
+	border: 1px solid var(--l4);
+	border-radius: 3px;
+	background: transparent;
+	cursor: pointer;
+}
+.omt-cell:hover {
+	border-color: var(--omt-c);
+}
+.omt-cell.omt-on {
+	border-color: var(--omt-c);
+	background: color-mix(in srgb, var(--omt-c) 60%, transparent);
+}
+.omt-sizelabel {
+	color: var(--t3);
+	font-size: 0.85em;
 }

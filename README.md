@@ -5,8 +5,10 @@ Plugin per [Tern](https://stencil.so/tern) che mostra in un blocco un tile color
 
 Ogni tile mostra:
 
-- **sessione Tern → sessione omp** e lo stato: *lavora*, *attende te*, *inattivo*;
-- la **directory** della sessione omp;
+- il **titolo della sessione omp** (quello che omp mostra tra virgolette nel campo di input) e lo stato: *lavora*,
+  *attende te*, *inattivo*;
+- gli **ultimi 4 livelli della directory** della sessione omp (il percorso intero passando sopra il tile) e, sotto
+  lo stato, il **nome della sessione Tern**, nel colore del tile;
 - il **modello** e il livello di thinking;
 - la **percentuale di contesto**, con una barra che diventa gialla dal 50% e rossa dall'85%;
 - una piccola **scena di [Flow](https://github.com/robdmac/flow)** che segue il lavoro dell'agente: cresce con il
@@ -40,11 +42,14 @@ tern plugin link percorso/della/repo
 | --- | --- |
 | **Ctrl+Alt+R**, oppure *Apri omp Tiles* dalla palette | Apre il blocco della sessione di Tern in cui sei, accanto al pannello attivo, o lo mette a fuoco se c'è già |
 | Clic su un tile | Va alla sessione omp di quel tile |
-| Tasto destro › *Scene fire … bubbles* | Sceglie la scena del tile |
-| Tasto destro › *Move left* / *Move right* | Scambia il tile con quello prima o dopo |
-| Tasto destro › *Wider* / *Narrower* | Il tile occupa una colonna in più o in meno |
-| Tasto destro › *Taller* / *Shorter* | Il tile occupa una o due righe (la scena si allunga) |
-| Tasto destro › *Color red … pink*, *Color none* | Sceglie il colore del tile |
+| Bottoni *compact* / *snapcompact* | Mandano `/compact` o `/compact snapcompact` a quella sessione omp senza spostarti. Attivi solo con omp *inattivo*; altrimenti sono grigi e un clic avvisa che omp sta lavorando |
+| Icona *sliders* in alto a destra, oppure tasto destro › *Personalizza* | Apre il pannello del tile; *Fatto* lo chiude |
+| Pannello › *Scena* | Sceglie la scena: fire, warp, avalon, engine, bubbles, ognuna con la sua icona |
+| Pannello › *Colore* | Sceglie il colore del tile tra i pallini, o nessun colore (cerchio barrato) |
+| Pannello › *Dimensione* | Una griglia piccola, larga quanto le colonne del blocco e alta due righe: il quadratino cliccato diventa l'angolo in basso a destra del tile |
+| Pannello › *Posizione* | Le frecce scambiano il tile con quello prima o dopo |
+| Tasto destro › *Copia stile* | Ricorda scena e colore del tile |
+| Tasto destro › *Incolla stile* | Dà al tile la scena e il colore copiati. Compare solo dopo un *Copia stile* e vale una volta: per incollare di nuovo, copia di nuovo |
 
 Ogni sessione di Tern ha la sua copia del blocco: aprilo con Ctrl+Alt+R nelle sessioni in cui lo vuoi. Tutte le
 copie mostrano gli stessi tile, con gli stessi colori, scene, ordine e dimensioni.
@@ -65,13 +70,16 @@ La scorciatoia non è Ctrl+Shift+R perché Tern la usa già per lo zoom del pann
   nella scena.
 - Contesto e livello di thinking sono letti dalla barra in basso di omp. Se una versione futura di omp la
   cambia, quei due valori mostrano "—".
+- Il titolo della sessione omp è letto dal campo di input di omp, perché il titolo che Tern dà all'agente è
+  quello della shell (es. "Windows PowerShell"). Se omp non mostra un titolo, o una sua versione futura cambia
+  quel campo, il tile torna al titolo di Tern.
 - Le scene si animano solo nella copia che hai davanti, al ritmo di Flow (un fotogramma ogni 70 ms, 125 da
   calme). Tern dà a un plugin 50 ms per volta: se molti tile non ci stanno insieme, ognuno rallenta un po'
   invece di bloccare la finestra. Quando nessuna copia è visibile i dati si aggiornano ogni 1,5 secondi.
 - Le scene `balloon`, `falcon`, `starship`, `surf`, `ski` e `train` di Flow non ci sono: dentro Tern sono troppo
   pesanti per il ritmo di Flow.
 - I tile non si trascinano col mouse e non si ridimensionano tirando un bordo: Tern dà ai plugin solo clic,
-  doppio clic e menu del tasto destro. Per questo spostamento e dimensioni sono nel menu.
+  doppio clic e menu del tasto destro. Per questo spostamento e dimensioni sono nel pannello del tile.
 - La larghezza del blocco è letta con `tern ls --json` ogni 2 secondi, perché l'API dei plugin non la fornisce.
 
 ## Crediti
