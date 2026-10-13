@@ -6,7 +6,7 @@ Plugin per [Tern](https://stencil.so/tern) che mostra in un blocco un tile color
 Ogni tile mostra:
 
 - il **titolo della sessione omp** (quello che omp mostra tra virgolette nel campo di input) e lo stato: *lavora*,
-  *attende te*, *inattivo*;
+  *attende te*, *inattivo*; mentre omp lavora, la card pulsa lentamente nel colore della sessione;
 - gli **ultimi 4 livelli della directory** della sessione omp (il percorso intero passando sopra il tile) e, sotto
   lo stato, il **nome della sessione Tern**, nel colore della sessione;
 - il **modello** e il livello di thinking;

@@ -1,7 +1,7 @@
 schema = 1
 id = "omp-tiles"
 name = "omp Tiles"
-version = "0.5.3"
+version = "0.6.0"
 description = "Tile colorati con lo stato di ogni sessione omp aperta in Tern."
 icon = "sparkle"
 window = "window.luau"

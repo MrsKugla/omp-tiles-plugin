@@ -371,7 +371,7 @@ local function tileNode(t: Tile): Node
 	end
 	return ui.el("div", {
 		key = "p" .. paneStr,
-		class = "omt-tile" .. (if color then " omt-" .. color else ""),
+		class = "omt-tile" .. (if color then " omt-" .. color else "") .. (if i.state == "working" then " omt-working" else ""),
 		title = i.cwd,
 		actions = { click = go },
 	}, kids)

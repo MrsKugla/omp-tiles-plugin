@@ -1,3 +1,6 @@
+0.6.0 - [14/10/2026]
+    - Le card con omp al lavoro pulsano lentamente, con una dissolvenza ogni 2,5 secondi nel colore della sessione; ferme se il sistema chiede meno animazioni (file: styles.css, window.luau)
+
 0.5.3 - [14/10/2026]
     - Corretto il titolo della sessione omp, che mostrava "Windows PowerShell": omp ha spostato il suo campo di input e ora il plugin lo cerca per ruolo; letti di nuovo anche contesto e livello di thinking (file: window.luau)
     - Il titolo resta anche mentre scrivi nel campo di input di omp, che in quel momento lo nasconde (file: window.luau)
