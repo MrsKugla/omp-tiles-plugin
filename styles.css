@@ -15,16 +15,6 @@
 .omt-grid.omt-c7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
 .omt-grid.omt-c8 { grid-template-columns: repeat(8, minmax(0, 1fr)); }
 
-/* How many columns and rows a tile takes (right-click › Wider, Taller, …). */
-.omt-tile.omt-w2 { grid-column: span 2; }
-.omt-tile.omt-w3 { grid-column: span 3; }
-.omt-tile.omt-w4 { grid-column: span 4; }
-.omt-tile.omt-w5 { grid-column: span 5; }
-.omt-tile.omt-w6 { grid-column: span 6; }
-.omt-tile.omt-w7 { grid-column: span 7; }
-.omt-tile.omt-w8 { grid-column: span 8; }
-.omt-tile.omt-h2 { grid-row: span 2; }
-
 .omt-tile {
 	--omt-c: var(--t4);
 	display: flex;
@@ -44,8 +34,8 @@
 	box-shadow: inset 0 0 0 1px var(--l4);
 }
 
-/* A colored tile reads like a colored tab: a tinted fill and a ring of its color.
-   The color classes also tint the swatches of the options panel. */
+/* A colored tile reads like a colored tab: a tinted fill and a ring of its
+   session's color. The color classes also tint the picker's swatches. */
 .omt-red { --omt-c: #ff3b30; }
 .omt-orange { --omt-c: #ff9500; }
 .omt-yellow { --omt-c: #e0a800; }
@@ -94,7 +84,7 @@
 	font-size: inherit;
 }
 
-/* The Tern session, in the tile's color. */
+/* The Tern session, in its color. */
 .omt-session {
 	flex: none;
 	max-width: 45%;
@@ -105,10 +95,60 @@
 	font-weight: 600;
 }
 
-/* /compact buttons: live while omp is idle, greyed out otherwise. */
+/* The palette before the session name, shown while the pointer is on the
+   row: opens the session's color picker. */
+.omt-palette {
+	display: flex;
+	flex: none;
+	padding: 1px;
+	border: none;
+	border-radius: 5px;
+	background: transparent;
+	color: var(--t3);
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 120ms var(--ease);
+}
+.omt-where:hover .omt-palette {
+	opacity: 1;
+}
+.omt-palette:hover {
+	background: var(--l2);
+	color: var(--t1);
+}
+
+/* /compact buttons: live while omp is idle, greyed out otherwise; the move
+   arrows at the right, shown while the pointer is on the tile. */
 .omt-acts {
 	display: flex;
+	align-items: center;
 	gap: 6px;
+}
+.omt-move {
+	display: flex;
+	gap: 2px;
+	margin-left: auto;
+	opacity: 0;
+	transition: opacity 120ms var(--ease);
+}
+.omt-tile:hover .omt-move {
+	opacity: 1;
+}
+.omt-arrow {
+	display: flex;
+	padding: 1px;
+	border: none;
+	border-radius: 5px;
+	background: transparent;
+	color: var(--t3);
+	cursor: pointer;
+}
+.omt-arrow:hover {
+	background: var(--l2);
+	color: var(--t1);
+}
+.omt-arrow.omt-arrow-l {
+	transform: scaleX(-1);
 }
 .omt-btn {
 	padding: 1px 8px;
@@ -137,42 +177,12 @@
 	min-width: 0;
 }
 
-.omt-fire {
-	margin-top: 2px;
-	border-radius: 6px;
-	background: #0d0e12;
-	padding: 2px 4px;
-	line-height: 1;
-	overflow: hidden;
-}
-
-/* A scene narrower than the tile (engine stops at 48x15 cells) sits centered. */
-.omt-fire .sf-ansi {
-	background: transparent;
-	line-height: 1;
-	width: fit-content;
-	margin: 0 auto;
-}
-
-/* The sliders icon in the header: opens the options panel. */
-.omt-optbtn {
+/* The session color picker, inside the tile: dots, then Annulla / Conferma. */
+.omt-picker {
 	display: flex;
-	padding: 2px;
-	border: none;
-	border-radius: 5px;
-	background: transparent;
-	color: var(--t3);
-	cursor: pointer;
-}
-.omt-optbtn:hover {
-	background: var(--l2);
-	color: var(--t1);
-}
-
-/* The options panel: one row per setting, label on the left. */
-.omt-opts {
-	display: flex;
-	flex-direction: column;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
 	gap: 8px;
 	padding: 8px;
 	border-radius: 8px;
@@ -180,51 +190,15 @@
 	box-shadow: inset 0 0 0 1px var(--l2);
 	cursor: default;
 }
-.omt-optrow {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	min-width: 0;
-}
-.omt-optlabel {
-	flex: none;
-	width: 92px;
+.omt-dots,
+.omt-pickbtns {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	color: var(--t2);
-	font-size: 0.85em;
 }
-.omt-optctl {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 6px;
-	min-width: 0;
-}
-
-/* Scene and move buttons: icon + name, the current one ringed in the tile's color. */
-.omt-opt {
-	display: flex;
-	align-items: center;
-	gap: 4px;
-	padding: 2px 8px;
-	border-radius: 6px;
-	border: 1px solid var(--l2);
-	background: transparent;
-	color: inherit;
-	font-size: 0.85em;
-	cursor: pointer;
-}
-.omt-opt:hover {
-	background: var(--l2);
-}
-.omt-opt.omt-on {
+.omt-btn.omt-btn-ok {
 	border-color: var(--omt-c);
-	background: color-mix(in srgb, var(--omt-c) 22%, transparent);
-}
-.omt-opt.omt-close {
-	margin-left: auto;
+	background: color-mix(in srgb, var(--omt-c) 35%, transparent);
 }
 
 /* Color swatches: round dots, "none" a ringed slashed circle. */
@@ -254,38 +228,4 @@
 }
 .omt-sw.omt-sw-none.omt-on {
 	box-shadow: inset 0 0 0 1px var(--l4), 0 0 0 2px var(--card), 0 0 0 4px var(--t3);
-}
-
-/* Size picker: one small cell per block column and tile row; the cells
-   up to the tile's size are filled. */
-.omt-sizegrid {
-	display: grid;
-	grid-template-columns: repeat(2, 16px);
-	gap: 3px;
-}
-.omt-sizegrid.omt-c3 { grid-template-columns: repeat(3, 16px); }
-.omt-sizegrid.omt-c4 { grid-template-columns: repeat(4, 16px); }
-.omt-sizegrid.omt-c5 { grid-template-columns: repeat(5, 16px); }
-.omt-sizegrid.omt-c6 { grid-template-columns: repeat(6, 16px); }
-.omt-sizegrid.omt-c7 { grid-template-columns: repeat(7, 16px); }
-.omt-sizegrid.omt-c8 { grid-template-columns: repeat(8, 16px); }
-.omt-cell {
-	width: 16px;
-	height: 12px;
-	padding: 0;
-	border: 1px solid var(--l4);
-	border-radius: 3px;
-	background: transparent;
-	cursor: pointer;
-}
-.omt-cell:hover {
-	border-color: var(--omt-c);
-}
-.omt-cell.omt-on {
-	border-color: var(--omt-c);
-	background: color-mix(in srgb, var(--omt-c) 60%, transparent);
-}
-.omt-sizelabel {
-	color: var(--t3);
-	font-size: 0.85em;
 }

@@ -1,0 +1,31 @@
+0.5.3 - [14/10/2026]
+    - Corretto il titolo della sessione omp, che mostrava "Windows PowerShell": omp ha spostato il suo campo di input e ora il plugin lo cerca per ruolo; letti di nuovo anche contesto e livello di thinking (file: window.luau)
+    - Il titolo resta anche mentre scrivi nel campo di input di omp, che in quel momento lo nasconde (file: window.luau)
+
+0.5.2 - [14/10/2026]
+    - Il colore della sessione Tern si sceglie dall'icona tavolozza che compare accanto al suo nome, senza menu del tasto destro (file: window.luau, styles.css)
+
+0.5.1 - [14/10/2026]
+    - Tolto il bottone snapcompact: resta solo compact (file: window.luau)
+
+0.5.0 - [14/10/2026]
+    - Tolta la maniglia della dimensione: tutte le card hanno la stessa misura e seguono la larghezza del blocco (file: window.luau, styles.css)
+    - Spostamento con le frecce ← → che compaiono passando sopra la card, al posto di Alt+clic (file: window.luau, styles.css)
+
+0.4.0 - [14/10/2026]
+    - Colore per sessione Tern invece che per card: tasto destro sul nome della sessione apre nella card i pallini con Annulla/Conferma, e il colore vale per tutte le card di quella sessione (file: window.luau, styles.css)
+    - Spostamento con Alt+clic sulla card da prendere e Alt+clic su quella di destinazione (file: window.luau)
+    - Maniglia nell'angolo in basso a destra che cambia la dimensione: 1×1, 2×1, 2×2 (file: window.luau, styles.css)
+    - Tolti il pannello Personalizza, il menu del tasto destro sulla card e Copia/Incolla stile
+
+0.3.0 - [14/10/2026]
+    - Rimosse le scene di Flow e le animazioni: il tile mostra solo stato, titolo, percorso, sessione, modello e contesto (file: window.luau, styles.css)
+    - Aggiornamento semplice una volta al secondo, solo per la copia del blocco visibile, senza leggere i transcript degli agenti; apertura con le card già pronte e ridisegno immediato dopo un clic (file: window.luau)
+    - Copia/Incolla stile copia solo il colore; tolta la riga Scena dal pannello Personalizza
+    - Tolti i log di diagnostica dei passaggi lenti; README senza Flow e senza la sua licenza
+
+0.2.0 - [10/10/2026]
+    - Titolo della sessione omp letto dal campo di input di omp, ultimi 4 livelli del percorso e sessione Tern nel colore del tile (file: window.luau, styles.css)
+    - Bottoni compact e snapcompact, attivi solo con omp fermo (file: window.luau)
+    - Pannello Personalizza con scena, colori, griglia della dimensione e posizione; Copia/Incolla stile dal tasto destro, valido una volta per copia (file: window.luau, styles.css)
+    - Corretto lo stato "lavora" mostrato a omp fermo e ridotti i timeout dei 50 ms di Tern (file: window.luau)
